@@ -5,6 +5,7 @@ using Amazon.CDK.AWS.CloudFront.Origins;
 using Amazon.CDK.AWS.DynamoDB;
 using Amazon.CDK.AWS.Events.Targets;
 using Amazon.CDK.AWS.Lambda;
+using Amazon.CDK.AWS.Lambda.EventSources;
 using Amazon.CDK.AWS.S3;
 using Amazon.CDK.AWS.SQS;
 using Amazon.CDK.AWS.WAFv2;
@@ -63,7 +64,8 @@ namespace IacCdk
             {
                 FunctionName = "DataCleanerFunction",
                 Runtime = Runtime.PYTHON_3_11,
-                Environment = lambdaEnvVariables
+                Environment = lambdaEnvVariables,
+                Timeout = Duration.Seconds(10)
             });
 
             var dataProcessorFunction = new Function(this, "DataProcessorFunction", new FunctionProps
@@ -199,13 +201,28 @@ namespace IacCdk
             });
             #endregion
 
-            #region EventMappings
+            #region "EventMappings"
             // Add SQS event source to data processor
-            dataProcessorFunction.AddEventSourceMapping("DataProcessorSQSTrigger", new EventSourceMappingOptions
+            dataProcessorFunction.AddEventSource(new SqsEventSource(fifoQueue, new SqsEventSourceProps
             {
-                EventSourceArn = fifoQueue.QueueArn
-            });
+                MaxConcurrency = 1
+            }));
 
+            dataCleanerFunction.AddEventSource(new S3EventSource(dataLoadBucket, new S3EventSourceProps
+            {
+                Events = new[]
+                {
+                    EventType.OBJECT_CREATED,
+                }
+            }));
+            #endregion
+
+            #region "Permissions"
+            rankingTable.GrantReadWriteData(dataProcessorFunction);
+            rankingTable.GrantReadData(globalRankingFunction);
+            rankingTable.GrantReadData(tournamentRankingFunction);
+
+            dataLoadBucket.GrantRead(dataCleanerFunction);
             #endregion
 
             #region "Output"
