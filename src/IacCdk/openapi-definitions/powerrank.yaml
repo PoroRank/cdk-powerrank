@@ -86,6 +86,36 @@ paths:
                   $ref: '#/components/schemas/Team'
         '400':
           description: Invalid ID supplied
+  /tournaments:
+    get:
+      tags:
+        - Tournaments
+      summary: Get all tournaments
+      operationId: getTournaments
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Tournament'
+  /teams:
+    get:
+      tags:
+        - Teams
+      summary: Get all teams
+      operationId: getTeams
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Team'
 components:
   schemas:
     Team:
@@ -101,4 +131,14 @@ components:
           type: integer
           format: int64
           example: 123
+      additionalProperties: false
+    Tournament:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 123
+        name:
+          type: string
+          example: worlds2021
       additionalProperties: false
