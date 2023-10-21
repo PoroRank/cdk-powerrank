@@ -3,6 +3,7 @@ using Amazon.CDK.AWS.APIGateway;
 using Amazon.CDK.AWS.CloudFront;
 using Amazon.CDK.AWS.CloudFront.Origins;
 using Amazon.CDK.AWS.DynamoDB;
+using Amazon.CDK.AWS.ECR;
 using Amazon.CDK.AWS.Events.Targets;
 using Amazon.CDK.AWS.Lambda;
 using Amazon.CDK.AWS.Lambda.EventSources;
@@ -15,10 +16,6 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using static Amazon.CDK.AWS.WAFv2.CfnWebACL;
 
-//Resolve Lambda/Cloudfront ambiguous reference
-using Function = Amazon.CDK.AWS.Lambda.Function;
-using FunctionProps = Amazon.CDK.AWS.Lambda.FunctionProps;
-
 namespace IacCdk
 {
     public class IacCdkStack : Stack
@@ -26,81 +23,111 @@ namespace IacCdk
         internal IacCdkStack(Construct scope, string id, IStackProps props = null) : base(scope, id, props)
         {
             #region "DynamoDB"
+            var pointsLocalSecondaryIndex = new LocalSecondaryIndexProps
+            {
+                IndexName = "PointsLSI",
+                SortKey = new Attribute
+                {
+                    Name = "Points",
+                    Type = AttributeType.NUMBER
+                }
+            };
+
             var rankingTable = new TableV2(this, "Rating", new TablePropsV2
             {
                 TableName = "Ratings",
                 RemovalPolicy = RemovalPolicy.DESTROY,
                 PartitionKey = new Attribute
                 {
-                    Name = "Id",
-                    Type = AttributeType.NUMBER
+                    Name = "PK",
+                    Type = AttributeType.STRING
                 },
                 SortKey = new Attribute
                 {
-                    Name = "Points",
+                    Name = "SK",
                     Type = AttributeType.STRING
+                },
+                LocalSecondaryIndexes = new LocalSecondaryIndexProps[1]{
+                    pointsLocalSecondaryIndex
                 },
                 Billing = Billing.OnDemand()
             });
             #endregion
 
-            #region "SQS"
-            var fifoQueue = new Queue(this, "ProcessingQueue", new QueueProps
+            #region "ECR"
+            var dataCleanECR = new Repository(this, "data-cleaner", new RepositoryProps
             {
-                QueueName = "ProcessingQueue",
-                Fifo = true
+                RepositoryName = "data-cleaner",
+                AutoDeleteImages = true
             });
 
-            var processingQueue = new SqsQueue(fifoQueue);
+            var dataProcessECR = new Repository(this, "data-processor", new RepositoryProps
+            {
+                RepositoryName = "data-cleaner",
+                AutoDeleteImages = true
+            });
+
+            var globalRankECR = new Repository(this, "get-global-rank", new RepositoryProps
+            {
+                RepositoryName = "get-global-rank",
+                AutoDeleteImages = true
+            });
+
+            var tournamentRankECR = new Repository(this, "get-tournament-rank", new RepositoryProps
+            {
+                RepositoryName = "get-global-rank",
+                AutoDeleteImages = true
+            });
+
+            var tournamentECR = new Repository(this, "get-tournaments", new RepositoryProps
+            {
+                RepositoryName = "get-global-rank",
+                AutoDeleteImages = true
+            });
+
+            var teamECR = new Repository(this, "get-teams", new RepositoryProps
+            {
+                RepositoryName = "get-global-rank",
+                AutoDeleteImages = true
+            });
             #endregion
 
             #region "Lambda"
             var lambdaEnvVariables = new Dictionary<string, string>
             {
                 {"TABLE_NAME", rankingTable.TableName},
+                {"POINTS_LSI_NAME", pointsLocalSecondaryIndex.IndexName},
             };
 
-            var dataCleanerFunction = new Function(this, "DataCleanerFunction", new FunctionProps
-            {
-                FunctionName = "DataCleanerFunction",
-                Runtime = Runtime.PYTHON_3_11,
-                Environment = lambdaEnvVariables,
-                Timeout = Duration.Seconds(10)
-            });
+            var baseImage = DockerImageCode.FromImageAsset("../Base.Python39.Lambda");
 
-            var dataProcessorFunction = new Function(this, "DataProcessorFunction", new FunctionProps
+            var globalRankingFunction = new DockerImageFunction(this, "GlobalRankingFunction", new DockerImageFunctionProps
             {
-                FunctionName = "DataProcessorFunction",
-                Runtime = Runtime.PYTHON_3_11,
-                Environment = lambdaEnvVariables,
-            });
-
-            var globalRankingFunction = new Function(this, "GlobalRankingFunction", new FunctionProps
-            {
-                FunctionName = "GlobalRankingFunction",
-                Runtime = Runtime.PYTHON_3_11,
+                Code = baseImage,
                 Environment = lambdaEnvVariables
             });
 
-            var tournamentRankingFunction = new Function(this, "TournamentRankingFunction", new FunctionProps
+            var tournamentRankingFunction = new DockerImageFunction(this, "TournamentRankingFunction", new DockerImageFunctionProps
             {
-                FunctionName = "TournamentRankingFunction",
-                Runtime = Runtime.PYTHON_3_11,
+                Code = baseImage,
+                Environment = lambdaEnvVariables
+            });
+
+            var tournamentsFunction = new DockerImageFunction(this, "TournamentsFunction", new DockerImageFunctionProps
+            {
+                Code = baseImage,
+                Environment = lambdaEnvVariables
+            });
+
+            var teamsFunction = new DockerImageFunction(this, "TeamsFunction", new DockerImageFunctionProps
+            {
+                Code = baseImage,
                 Environment = lambdaEnvVariables
             });
             #endregion
 
             #region "S3"
-            var dataLoadBucket = new Bucket(this, "DataLoadBucket", new BucketProps
-            {
-                BucketName = "DataLoadBucket"
-            });
-
-            var staticReactBucket = new Bucket(this, "StaticReactBucket", new BucketProps
-            {
-                BucketName = "StaticReactBucket",
-
-            });
+            var staticReactBucket = new Bucket(this, "StaticReactBucket");
             #endregion
 
             #region "API Gateway"
@@ -108,130 +135,120 @@ namespace IacCdk
             {
                 RestApiName = "PowerRankApi",
                 Description = "PowerRank Lambda Powered Backend API",
-                DeployOptions = new StageOptions
-                {
-                    StageName = "Test",
-                    ThrottlingBurstLimit = 10,
-                    ThrottlingRateLimit = 10,
-                    LoggingLevel = MethodLoggingLevel.INFO,
-                    MetricsEnabled = true
-                },
                 DefaultCorsPreflightOptions = new CorsOptions
                 {
                     AllowOrigins = new string[]
                     {
-                        "" //add react s3 bucket origin
+                        staticReactBucket.BucketWebsiteUrl
                     }
                 }
             });
-            #endregion
 
-            #region "WAF"
-            //ref: https://github.com/aws-samples/aws-cdk-examples/blob/master/csharp/CloudFront-S3-WAF/src/CdkStack.cs
-
-            //Get the local machine Ip address.    
-            var localIpAddress = GetIpAddressAsync().Result + "/32";
-
-            //Restrict website access based on IP address by creating WAF Web ACL
-            CfnIPSet cfnIPSet = new CfnIPSet(
-                this,
-                "AllowedIPs",
-                new CfnIPSetProps
-                {
-                    Addresses = new string[] { localIpAddress }, //Provide list of allowed IP address. You can provide CIDR address as well.
-                    IpAddressVersion = "IPV4",
-                    Scope = "CLOUDFRONT"
-                }
-            );
-
-            CfnWebACL cfnWebACL = new CfnWebACL(
-                this,
-                "WebACL",
-                new CfnWebACLProps
-                {
-                    DefaultAction = new DefaultActionProperty
-                    {
-                        Block = new BlockActionProperty
-                        {
-                            CustomResponse = new CustomResponseProperty { ResponseCode = 403 }
-                        }
-                    },
-                    Scope = "CLOUDFRONT",
-                    VisibilityConfig = new VisibilityConfigProperty
-                    {
-                        CloudWatchMetricsEnabled = true,
-                        MetricName = "WebACLMetric",
-                        SampledRequestsEnabled = true
-                    },
-                    Rules = new[]
-                    {
-                        new RuleProperty
-                        {
-                            Name = "WebACLRule",
-                            Priority = 1,
-                            Statement = new StatementProperty
-                            {
-                                IpSetReferenceStatement = new IPSetReferenceStatementProperty
-                                {
-                                    Arn = cfnIPSet.AttrArn
-                                }
-                            },
-                            VisibilityConfig = new VisibilityConfigProperty
-                            {
-                                CloudWatchMetricsEnabled = true,
-                                MetricName = "WebACLRuleMetric",
-                                SampledRequestsEnabled = true
-                            },
-                            Action = new RuleActionProperty { Allow = new AllowActionProperty() }
-                        }
-                    }
-                }
-            );
-            #endregion
-
-            #region "Cloudfront"
-            var cloudFrontDistribution = new Distribution(this, "CloudFrontDistribution", new DistributionProps
+            var test2 = new SpecRestApi(this, "", new SpecRestApiProps
             {
-                DefaultBehavior = new BehaviorOptions
-                {
-                    Origin = new S3Origin(staticReactBucket)
-                },
-                WebAclId = cfnWebACL.AttrArn,
-                PriceClass = PriceClass.PRICE_CLASS_100
+                RestApiName = "",
+                ApiDefinition = ApiDefinition.FromAsset("")
             });
+
+            var test = new AssetApiDefinition("");
+
+
             #endregion
 
-            #region "EventMappings"
-            // Add SQS event source to data processor
-            dataProcessorFunction.AddEventSource(new SqsEventSource(fifoQueue, new SqsEventSourceProps
-            {
-                MaxConcurrency = 1
-            }));
+            //#region "WAF"
+            ////ref: https://github.com/aws-samples/aws-cdk-examples/blob/master/csharp/CloudFront-S3-WAF/src/CdkStack.cs
 
-            dataCleanerFunction.AddEventSource(new S3EventSource(dataLoadBucket, new S3EventSourceProps
-            {
-                Events = new[]
-                {
-                    EventType.OBJECT_CREATED,
-                }
-            }));
-            #endregion
+            ////Get the local machine Ip address.    
+            //var localIpAddress = GetIpAddressAsync().Result + "/32";
+
+            ////Restrict website access based on IP address by creating WAF Web ACL
+            //CfnIPSet cfnIPSet = new CfnIPSet(
+            //    this,
+            //    "AllowedIPs",
+            //    new CfnIPSetProps
+            //    {
+            //        Addresses = new string[] { localIpAddress }, //Provide list of allowed IP address. You can provide CIDR address as well.
+            //        IpAddressVersion = "IPV4",
+            //        Scope = "CLOUDFRONT"
+            //    }
+            //);
+
+            //CfnWebACL cfnWebACL = new CfnWebACL(
+            //    this,
+            //    "WebACL",
+            //    new CfnWebACLProps
+            //    {
+            //        DefaultAction = new DefaultActionProperty
+            //        {
+            //            Block = new BlockActionProperty
+            //            {
+            //                CustomResponse = new CustomResponseProperty { ResponseCode = 403 }
+            //            }
+            //        },
+            //        Scope = "CLOUDFRONT",
+            //        VisibilityConfig = new VisibilityConfigProperty
+            //        {
+            //            CloudWatchMetricsEnabled = true,
+            //            MetricName = "WebACLMetric",
+            //            SampledRequestsEnabled = true
+            //        },
+            //        Rules = new[]
+            //        {
+            //            new RuleProperty
+            //            {
+            //                Name = "WebACLRule",
+            //                Priority = 1,
+            //                Statement = new StatementProperty
+            //                {
+            //                    IpSetReferenceStatement = new IPSetReferenceStatementProperty
+            //                    {
+            //                        Arn = cfnIPSet.AttrArn
+            //                    }
+            //                },
+            //                VisibilityConfig = new VisibilityConfigProperty
+            //                {
+            //                    CloudWatchMetricsEnabled = true,
+            //                    MetricName = "WebACLRuleMetric",
+            //                    SampledRequestsEnabled = true
+            //                },
+            //                Action = new RuleActionProperty { Allow = new AllowActionProperty() }
+            //            }
+            //        }
+            //    }
+            //);
+            //#endregion
+
+            //#region "Cloudfront"
+            //var cloudFrontDistribution = new Distribution(this, "CloudFrontDistribution", new DistributionProps
+            //{
+            //    DefaultBehavior = new BehaviorOptions
+            //    {
+            //        Origin = new S3Origin(staticReactBucket)
+            //    },
+            //    WebAclId = cfnWebACL.AttrArn,
+            //    PriceClass = PriceClass.PRICE_CLASS_100
+            //});
+            //#endregion
 
             #region "Permissions"
-            rankingTable.GrantReadWriteData(dataProcessorFunction);
             rankingTable.GrantReadData(globalRankingFunction);
             rankingTable.GrantReadData(tournamentRankingFunction);
-
-            dataLoadBucket.GrantRead(dataCleanerFunction);
+            rankingTable.GrantReadData(tournamentsFunction);
+            rankingTable.GrantReadData(teamsFunction); 
             #endregion
 
             #region "Output"
-            new CfnOutput(this, "CloudFront URL", new CfnOutputProps
+            //new CfnOutput(this, "CloudFront URL", new CfnOutputProps
+            //{
+            //    Value = string.Format(
+            //        "https://{0}/index.html",
+            //        cloudFrontDistribution.DomainName
+            //        )
+            //});
+
+            new CfnOutput(this, "APi Gateway URL", new CfnOutputProps
             {
-                Value = string.Format(
-                    "https://{0}/index.html",
-                    cloudFrontDistribution.DomainName
-                    )
+                Value = apiGateway.Url
             });
             #endregion
         }
