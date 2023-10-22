@@ -58,21 +58,21 @@ namespace IacCdk
 
             var tournamentRankECR = new Repository(this, "get-tournament-rank", new RepositoryProps
             {
-                RepositoryName = "get-global-rank",
+                RepositoryName = "get-tournament-rank",
                 RemovalPolicy = RemovalPolicy.DESTROY,
                 AutoDeleteImages = true
             });
 
             var tournamentECR = new Repository(this, "get-tournaments", new RepositoryProps
             {
-                RepositoryName = "get-global-rank",
+                RepositoryName = "get-tournaments",
                 RemovalPolicy = RemovalPolicy.DESTROY,
                 AutoDeleteImages = true
             });
 
             var teamECR = new Repository(this, "get-teams", new RepositoryProps
             {
-                RepositoryName = "get-global-rank",
+                RepositoryName = "get-teams",
                 RemovalPolicy = RemovalPolicy.DESTROY,
                 AutoDeleteImages = true
             });
@@ -129,7 +129,7 @@ namespace IacCdk
             var globalRankings = apiGateway.Root.AddResource("global_rankings");
             globalRankings.AddMethod("GET", new LambdaIntegration(globalRankingFunction));
 
-            var tournamentRankings = apiGateway.Root.AddResource("tournament_rankings");
+            var tournamentRankings = apiGateway.Root.AddResource("tournament_rankings").AddResource("{tournament_id}");
             tournamentRankings.AddMethod("GET", new LambdaIntegration(tournamentRankingFunction));
 
             var teamRankings = apiGateway.Root.AddResource("team_rankings");
