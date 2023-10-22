@@ -52,24 +52,28 @@ namespace IacCdk
             var globalRankECR = new Repository(this, "get-global-rank", new RepositoryProps
             {
                 RepositoryName = "get-global-rank",
+                RemovalPolicy = RemovalPolicy.DESTROY,
                 AutoDeleteImages = true
             });
 
             var tournamentRankECR = new Repository(this, "get-tournament-rank", new RepositoryProps
             {
                 RepositoryName = "get-global-rank",
+                RemovalPolicy = RemovalPolicy.DESTROY,
                 AutoDeleteImages = true
             });
 
             var tournamentECR = new Repository(this, "get-tournaments", new RepositoryProps
             {
                 RepositoryName = "get-global-rank",
+                RemovalPolicy = RemovalPolicy.DESTROY,
                 AutoDeleteImages = true
             });
 
             var teamECR = new Repository(this, "get-teams", new RepositoryProps
             {
                 RepositoryName = "get-global-rank",
+                RemovalPolicy = RemovalPolicy.DESTROY,
                 AutoDeleteImages = true
             });
             #endregion
@@ -81,7 +85,7 @@ namespace IacCdk
                 {"POINTS_LSI_NAME", pointsLocalSecondaryIndex.IndexName},
             };
 
-            var baseImage = DockerImageCode.FromImageAsset("../Base.Python39.Lambda");
+            var baseImage = DockerImageCode.FromImageAsset("./src/Base.Python39.Lambda");
 
             var globalRankingFunction = new DockerImageFunction(this, "GlobalRankingFunction", new DockerImageFunctionProps
             {
