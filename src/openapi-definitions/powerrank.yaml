@@ -80,9 +80,8 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/TournamentRankResponse'
+                type: object
+                $ref: '#/components/schemas/TournamentRankResponse'
         '400':
           description: Invalid ID supplied
   /tournaments:
