@@ -20,11 +20,10 @@ paths:
           schema:
             type: integer
             format: int64
-        - name: page_number
+        - name: next_token
           in: query
           schema:
-            type: integer
-            format: int64
+            type: string
       responses:
         '200':
           description: Successful operation
@@ -33,7 +32,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Team'
+                  $ref: '#/components/schemas/PagedRankResponse'
   /team_rankings:
     get:
       tags:
@@ -83,7 +82,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Team'
+                  $ref: '#/components/schemas/TournamentRankResponse'
         '400':
           description: Invalid ID supplied
   /tournaments:
@@ -118,6 +117,24 @@ paths:
                   $ref: '#/components/schemas/Team'
 components:
   schemas:
+    PagedRankResponse:
+      type: object
+      properties:
+        next_token:
+          type: string
+          example: 988399823
+        Ranks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Team'
+      additionalProperties: false
+    TournamentRankResponse:
+      type: object
+      properties:
+        stages:
+          type: array
+          items:
+            $ref: '#/components/schemas/StageRank'
     Team:
       type: object
       properties:
@@ -142,3 +159,13 @@ components:
           type: string
           example: worlds2021
       additionalProperties: false
+    StageRank:
+      type: object
+      properties:
+        name:
+          type: string
+          example: GROUPS
+        ranks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Team'

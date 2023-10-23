@@ -147,7 +147,7 @@ namespace IacCdk
             rankingTable.GrantReadData(globalRankingFunction);
             rankingTable.GrantReadData(tournamentRankingFunction);
             rankingTable.GrantReadData(tournamentsFunction);
-            rankingTable.GrantReadData(teamsFunction); 
+            rankingTable.GrantReadData(teamsFunction);
             #endregion
 
             #region "Output"
