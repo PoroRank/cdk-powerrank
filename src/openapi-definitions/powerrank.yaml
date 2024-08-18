@@ -20,11 +20,10 @@ paths:
           schema:
             type: integer
             format: int64
-        - name: page_number
+        - name: next_token
           in: query
           schema:
-            type: integer
-            format: int64
+            type: string
       responses:
         '200':
           description: Successful operation
@@ -33,7 +32,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Team'
+                  $ref: '#/components/schemas/PagedRankResponse'
   /team_rankings:
     get:
       tags:
@@ -81,13 +80,60 @@ paths:
           content:
             application/json:
               schema:
+                type: object
+                $ref: '#/components/schemas/TournamentRankResponse'
+        '400':
+          description: Invalid ID supplied
+  /tournaments:
+    get:
+      tags:
+        - Tournaments
+      summary: Get all tournaments
+      operationId: getTournaments
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Tournament'
+  /teams:
+    get:
+      tags:
+        - Teams
+      summary: Get all teams
+      operationId: getTeams
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/Team'
-        '400':
-          description: Invalid ID supplied
 components:
   schemas:
+    PagedRankResponse:
+      type: object
+      properties:
+        next_token:
+          type: string
+          example: 988399823
+        Ranks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Team'
+      additionalProperties: false
+    TournamentRankResponse:
+      type: object
+      properties:
+        stages:
+          type: array
+          items:
+            $ref: '#/components/schemas/StageRank'
     Team:
       type: object
       properties:
@@ -102,3 +148,23 @@ components:
           format: int64
           example: 123
       additionalProperties: false
+    Tournament:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 123
+        name:
+          type: string
+          example: worlds2021
+      additionalProperties: false
+    StageRank:
+      type: object
+      properties:
+        name:
+          type: string
+          example: GROUPS
+        ranks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Team'

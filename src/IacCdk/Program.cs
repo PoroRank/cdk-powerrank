@@ -10,7 +10,7 @@ namespace IacCdk
         public static void Main(string[] args)
         {
             var app = new App();
-            new IacCdkStack(app, "IacCdkStack", new StackProps
+            var powerRankStack = new IacCdkStack(app, "IacCdkStack", new StackProps
             {
                 // If you don't specify 'env', this stack will be environment-agnostic.
                 // Account/Region-dependent features and context lookups will not work,
@@ -28,16 +28,18 @@ namespace IacCdk
 
                 // Uncomment the next block if you know exactly what Account and Region you
                 // want to deploy the stack to.
-                /*
+
                 Env = new Amazon.CDK.Environment
                 {
-                    Account = "123456789012",
+                    Account = Aws.ACCOUNT_ID,
                     Region = "us-east-1",
                 }
-                */
+
 
                 // For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
             });
+
+            Tags.Of(powerRankStack).Add("power-rankings-hackathon", "2023");
             app.Synth();
         }
     }
